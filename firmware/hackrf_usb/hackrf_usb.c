@@ -34,6 +34,7 @@
 #include <rom_iap.h>
 #include "usb_descriptor.h"
 
+#include "sgpio_isr.h"
 #include "usb_device.h"
 #include "usb_endpoint.h"
 #include "usb_api_board_info.h"
@@ -220,6 +221,12 @@ static bool cpld_jtag_sram_load(jtag_t* const jtag) {
 	return success;
 }
 
+void usb_bulk_transfer_completion_cb(void* user_data, unsigned int transferred) {
+	(void)transferred;
+	uint32_t buffer_idx = (uint32_t)user_data;
+	buffer_count_usb_complete[buffer_idx] += 1;
+}
+
 int main(void) {
 	pin_setup();
 	enable_1v8_power();
@@ -264,8 +271,6 @@ int main(void) {
 		operacake_init();
 	}
 
-	unsigned int phase = 0;
-
 	while(true) {
 		// Check whether we need to initiate a CPLD update
 		if (start_cpld_update)
@@ -277,32 +282,42 @@ int main(void) {
 			sweep_mode();
 		}
 
-		// Set up IN transfer of buffer 0.
-		if ( usb_bulk_buffer_offset >= 16384
-		     && phase == 1
+		// In externally triggered transmit mode we fill the SGPIO buffers with the first
+		// user-provided samples so they are transmitted as soon as the trigger occurs.
+		// If the trigger occurs before the first USB transfer is completed then tough luck.
+		if (prime_sgpio == 1 && buffer_count_usb_complete[0] == 1) {
+			// The SGPIO output is double buffered so we must fill it twice.
+			sgpio_isr_tx();
+			sgpio_isr_tx();
+			prime_sgpio = 0;
+		}
+
+		// Set up USB transfer of buffer 0.
+		// Not equal is used instead of less than so behavior is correct even if the counter wraps.
+		// If is used instead of while so that the transfers are scheduled in the correct order.
+		if ( buffer_count_usb_sched[0] != buffer_count_rf[0]
 		     && transceiver_mode() != TRANSCEIVER_MODE_OFF) {
+			buffer_count_usb_sched[0] += 1;
 			usb_transfer_schedule_block(
 				(transceiver_mode() == TRANSCEIVER_MODE_RX)
 				? &usb_endpoint_bulk_in : &usb_endpoint_bulk_out,
 				&usb_bulk_buffer[0x0000],
 				0x4000,
-				NULL, NULL
-				);
-			phase = 0;
+				usb_bulk_transfer_completion_cb, (void*)0
+			);
 		}
 
-		// Set up IN transfer of buffer 1.
-		if ( usb_bulk_buffer_offset < 16384
-		     && phase == 0
+		// Set up USB transfer of buffer 1.
+		if ( buffer_count_usb_sched[1] != buffer_count_rf[1]
 		     && transceiver_mode() != TRANSCEIVER_MODE_OFF) {
+			buffer_count_usb_sched[1] += 1;
 			usb_transfer_schedule_block(
 				(transceiver_mode() == TRANSCEIVER_MODE_RX)
 				? &usb_endpoint_bulk_in : &usb_endpoint_bulk_out,
 				&usb_bulk_buffer[0x4000],
 				0x4000,
-				NULL, NULL
+				usb_bulk_transfer_completion_cb, (void*)1
 			);
-			phase = 1;
 		}
 	}
 

@@ -258,11 +258,39 @@ static int prepare_transfers(
 			device->transfers[transfer_index]->endpoint = endpoint_address;
 			device->transfers[transfer_index]->callback = callback;
 
-			error = libusb_submit_transfer(device->transfers[transfer_index]);
-			if( error != 0 )
-			{
-				last_libusb_error = error;
-				return HACKRF_ERROR_LIBUSB;
+			if ((endpoint_address & LIBUSB_ENDPOINT_OUT) == LIBUSB_ENDPOINT_OUT) {
+				// If we are transmitting then we fill the first buffers to be
+				// sent to the HackRF from the data callback as otherwise the
+				// HackRF will receive four transfers of zeros.
+				// For an OUT transfer `actual_length` will contain the number
+				// of bytes successfully transferred when the callback is made.
+				// It does not contain the size of the buffer to be filled.
+				// However, `valid_length` is commonly used in other HackRF
+				// code as the buffer length so we ensure that is the case here.
+				hackrf_transfer transfer = {
+					.device = device,
+					.buffer = device->transfers[transfer_index]->buffer,
+					.buffer_length = device->transfers[transfer_index]->length,
+					.valid_length = device->transfers[transfer_index]->length,
+					.rx_ctx = device->rx_ctx,
+					.tx_ctx = device->tx_ctx
+				};
+
+				if (device->callback(&transfer) == 0) {
+					error = libusb_submit_transfer(device->transfers[transfer_index]);
+					if (error != 0) {
+						last_libusb_error = error;
+						return HACKRF_ERROR_LIBUSB;
+					}
+				} else {
+					return HACKRF_ERROR_LIBUSB;
+				}
+			} else {
+				error = libusb_submit_transfer(device->transfers[transfer_index]);
+				if (error != 0) {
+					last_libusb_error = error;
+					return HACKRF_ERROR_LIBUSB;
+				}
 			}
 		}
 		return HACKRF_SUCCESS;
@@ -1495,8 +1523,7 @@ static void LIBUSB_CALL hackrf_libusb_transfer_callback(struct libusb_transfer* 
 {
 	hackrf_device* device = (hackrf_device*)usb_transfer->user_data;
 
-	if(usb_transfer->status == LIBUSB_TRANSFER_COMPLETED)
-	{
+	if(usb_transfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		hackrf_transfer transfer = {
 			.device = device,
 			.buffer = usb_transfer->buffer,
@@ -1505,6 +1532,15 @@ static void LIBUSB_CALL hackrf_libusb_transfer_callback(struct libusb_transfer* 
 			.rx_ctx = device->rx_ctx,
 			.tx_ctx = device->tx_ctx
 		};
+
+		// For an OUT transfer `actual_length` will contain the number of bytes
+		// successfully transferred when the callback is made. It does not
+		// contain the size of the buffer to be filled. However, `valid_length`
+		// is commonly used in other HackRF code as the buffer length so we
+		// ensure that is the case here.
+		if ((usb_transfer->endpoint & LIBUSB_ENDPOINT_OUT) == LIBUSB_ENDPOINT_OUT) {
+			transfer.valid_length = usb_transfer->length;
+		}
 
 		if( device->callback(&transfer) == 0 )
 		{
@@ -1561,6 +1597,7 @@ static int create_transfer_thread(hackrf_device* device,
 	{
 		device->streaming = false;
 		device->do_exit = false;
+		device->callback = callback;
 
 		result = prepare_transfers(
 			device, endpoint_address,
@@ -1573,7 +1610,6 @@ static int create_transfer_thread(hackrf_device* device,
 		}
 
 		device->streaming = true;
-		device->callback = callback;
 		result = pthread_create(&device->transfer_thread, 0, transfer_threadproc, device);
 		if( result == 0 )
 		{

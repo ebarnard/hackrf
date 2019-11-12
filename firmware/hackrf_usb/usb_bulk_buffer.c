@@ -24,3 +24,6 @@
 
 const uint32_t usb_bulk_buffer_mask = 32768 - 1;
 volatile uint32_t usb_bulk_buffer_offset = 0;
+volatile uint32_t buffer_count_rf[2] = {0, 0};
+volatile uint32_t buffer_count_usb_sched[2] = {0, 0};
+volatile uint32_t buffer_count_usb_complete[2] = {0, 0};

@@ -26,6 +26,19 @@
 
 #include "usb_bulk_buffer.h"
 
+void increment_buffer_offset() {
+	uint32_t buffer_idx = (usb_bulk_buffer_offset & 0x4000) >> 14;
+	uint32_t new_buffer_idx;
+
+	usb_bulk_buffer_offset = (usb_bulk_buffer_offset + 32) & usb_bulk_buffer_mask;
+	new_buffer_idx = (usb_bulk_buffer_offset & 0x4000) >> 14;
+
+	// If we have advanced to the next buffer increment the previous buffer count.
+	if (new_buffer_idx != buffer_idx) {
+		buffer_count_rf[buffer_idx] += 1;
+	}
+}
+
 void sgpio_isr_rx() {
 	SGPIO_CLR_STATUS_1 = (1 << SGPIO_SLICE_A);
 
@@ -52,7 +65,7 @@ void sgpio_isr_rx() {
 		  [p] "l" (p)
 		: "r0"
 	);
-	usb_bulk_buffer_offset = (usb_bulk_buffer_offset + 32) & usb_bulk_buffer_mask;
+	increment_buffer_offset();
 }
 
 void sgpio_isr_tx() {
@@ -81,5 +94,5 @@ void sgpio_isr_tx() {
 		  [p] "l" (p)
 		: "r0"
 	);
-	usb_bulk_buffer_offset = (usb_bulk_buffer_offset + 32) & usb_bulk_buffer_mask;
+	increment_buffer_offset();
 }

@@ -38,6 +38,7 @@
 
 #include <stddef.h>
 
+#include "usb_bulk_buffer.h"
 #include "usb_endpoint.h"
 
 typedef struct {
@@ -235,6 +236,7 @@ usb_request_status_t usb_vendor_request_set_freq_explicit(
 
 static volatile transceiver_mode_t _transceiver_mode = TRANSCEIVER_MODE_OFF;
 static volatile hw_sync_mode_t _hw_sync_mode = HW_SYNC_MODE_OFF;
+volatile uint8_t prime_sgpio = 0;
 
 void set_hw_sync_mode(const hw_sync_mode_t new_hw_sync_mode) {
 	_hw_sync_mode = new_hw_sync_mode;
@@ -250,6 +252,15 @@ void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 	usb_endpoint_disable(&usb_endpoint_bulk_in);
 	usb_endpoint_disable(&usb_endpoint_bulk_out);
 	
+	usb_bulk_buffer_offset = 0;
+	buffer_count_rf[0] = 0;
+	buffer_count_rf[1] = 0;
+	buffer_count_usb_sched[0] = 0;
+	buffer_count_usb_sched[1] = 0;
+	buffer_count_usb_complete[0] = 0;
+	buffer_count_usb_complete[1] = 0;
+	prime_sgpio = 0;
+
 	_transceiver_mode = new_transceiver_mode;
 	
 	if( _transceiver_mode == TRANSCEIVER_MODE_RX ) {
@@ -264,6 +275,14 @@ void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 		usb_endpoint_init(&usb_endpoint_bulk_out);
 		rf_path_set_direction(&rf_path, RF_PATH_DIRECTION_TX);
 		vector_table.irq[NVIC_SGPIO_IRQ] = sgpio_isr_tx;
+		// In hardware triggered mode we try to fill the transmit buffers as
+		// soon as possible so we start transmitting valid data as soon as the
+		// trigger occurs.
+		if (_hw_sync_mode == HW_SYNC_MODE_ON) {
+			buffer_count_rf[0] = 1;
+			buffer_count_rf[1] = 1;
+			prime_sgpio = 1;
+		}
 	} else {
 		led_off(LED2);
 		led_off(LED3);

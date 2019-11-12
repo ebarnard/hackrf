@@ -35,4 +35,13 @@ extern const uint32_t usb_bulk_buffer_mask;
 
 extern volatile uint32_t usb_bulk_buffer_offset;
 
+/* The following three variables are counters of the number of buffers that
+ * have been received or transmitted by the RF and USB subsystems. They are
+ * used to synchronise USB transfers and to count the number of samples that
+ * have been dropped or re-transmitted.
+ */
+extern volatile uint32_t buffer_count_rf[2];
+extern volatile uint32_t buffer_count_usb_sched[2];
+extern volatile uint32_t buffer_count_usb_complete[2];
+
 #endif/*__USB_BULK_BUFFER_H__*/
