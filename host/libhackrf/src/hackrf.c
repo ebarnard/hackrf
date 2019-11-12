@@ -85,6 +85,7 @@ typedef enum {
 	HACKRF_VENDOR_REQUEST_SPIFLASH_CLEAR_STATUS = 34,
 	HACKRF_VENDOR_REQUEST_OPERACAKE_GPIO_TEST = 35,
 	HACKRF_VENDOR_REQUEST_CPLD_CHECKSUM = 36,
+	HACKRF_VENDOR_REQUEST_READ_DROPPED_SAMPLES_COUNT = 37,
 } hackrf_vendor_request;
 
 #define USB_CONFIG_STANDARD 0x1
@@ -2166,6 +2167,35 @@ int ADDCALL hackrf_cpld_checksum(hackrf_device* device,
 		return HACKRF_ERROR_LIBUSB;
 	} else {
 		*crc = TO_LE(*crc);
+		return HACKRF_SUCCESS;
+	}
+}
+
+int ADDCALL hackrf_read_dropped_samples_count(hackrf_device* device,
+											 uint32_t* buffer_overrun_count)
+{
+	USB_API_REQUIRED(device, 0x0104)
+	uint8_t length;
+	int result;
+	
+	length = sizeof(*buffer_overrun_count);
+	result = libusb_control_transfer(
+		device->usb_device,
+		LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_DEVICE,
+		HACKRF_VENDOR_REQUEST_READ_DROPPED_SAMPLES_COUNT,
+		0,
+		0,
+		(unsigned char*)buffer_overrun_count,
+		length,
+		0
+	);
+
+	if (result < length)
+	{
+		last_libusb_error = result;
+		return HACKRF_ERROR_LIBUSB;
+	} else {
+		*buffer_overrun_count = TO_LE(*buffer_overrun_count);
 		return HACKRF_SUCCESS;
 	}
 }

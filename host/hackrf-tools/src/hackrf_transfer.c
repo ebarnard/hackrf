@@ -562,6 +562,7 @@ int main(int argc, char** argv) {
 	struct timeval t_end;
 	float time_diff;
 	unsigned int lna_gain=8, vga_gain=20, txvga_gain=0;
+	uint32_t prev_dropped_samples_count=0;
   
 	while( (opt = getopt(argc, argv, "H:wr:t:f:i:o:m:a:p:s:n:b:l:g:x:c:d:C:RS:h?")) != EOF )
 	{
@@ -1023,7 +1024,18 @@ int main(int argc, char** argv) {
 		u64toa(samples_to_xfer,&ascii_u64_data1),
 		u64toa((samples_to_xfer/FREQ_ONE_MHZ),&ascii_u64_data2) );
 	}
-	
+
+	// If we are not using hardware triggering there will have been samples
+	// dropped between `hackrf_start_tx/rx` and the first data arriving over
+	// USB but this is expected so don't report it. Hopefully after this point
+	// the HackRF will be receiving samples.
+	if (hw_sync == false || hw_sync_enable == 0) {
+		result = hackrf_read_dropped_samples_count(device, &prev_dropped_samples_count);
+		if (result != HACKRF_SUCCESS || result != HACKRF_ERROR_USB_API_VERSION) {
+			fprintf(stderr, "Failed to read dropped samples count.\n");
+		}
+	}
+
 	gettimeofday(&t_start, NULL);
 	gettimeofday(&time_start, NULL);
 
@@ -1031,7 +1043,7 @@ int main(int argc, char** argv) {
 	while( (hackrf_is_streaming(device) == HACKRF_TRUE) &&
 			(do_exit == false) ) 
 	{
-		uint32_t byte_count_now;
+		uint32_t byte_count_now, dropped_samples_count;
 		struct timeval time_now;
 		float time_difference, rate;
 		if (stream_size>0) {
@@ -1073,6 +1085,17 @@ int main(int argc, char** argv) {
 			} else {
 			    fprintf(stderr, "%4.1f MiB / %5.3f sec = %4.1f MiB/second\n",
 					    (byte_count_now / 1e6f), time_difference, (rate / 1e6f) );
+			}
+
+			result = hackrf_read_dropped_samples_count(device, &dropped_samples_count);
+			if (result == HACKRF_SUCCESS) {
+				if (dropped_samples_count != prev_dropped_samples_count) {
+					fprintf(stderr, "Dropped %d samples due to USB delay.\n",
+							dropped_samples_count - prev_dropped_samples_count);
+				}
+				prev_dropped_samples_count = dropped_samples_count;
+			} else if (result != HACKRF_ERROR_USB_API_VERSION) {
+				fprintf(stderr, "Failed to read dropped samples count.\n");
 			}
 
 			time_start = time_now;

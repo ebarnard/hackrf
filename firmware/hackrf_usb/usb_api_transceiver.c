@@ -259,6 +259,8 @@ void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode) {
 	buffer_count_usb_sched[1] = 0;
 	buffer_count_usb_complete[0] = 0;
 	buffer_count_usb_complete[1] = 0;
+	dropped_samples_count = 0;
+
 	prime_sgpio = 0;
 
 	_transceiver_mode = new_transceiver_mode;
@@ -336,4 +338,20 @@ usb_request_status_t usb_vendor_request_set_hw_sync_mode(
 	} else {
 		return USB_REQUEST_STATUS_OK;
 	}
+}
+
+volatile uint32_t dropped_samples_count = 0;
+
+usb_request_status_t usb_vendor_request_read_dropped_samples_count(
+	usb_endpoint_t* const endpoint, const usb_transfer_stage_t stage)
+{
+	uint8_t length;
+
+	if (stage == USB_TRANSFER_STAGE_SETUP) {
+		length = (uint8_t)sizeof(dropped_samples_count);
+		usb_transfer_schedule_block(endpoint->in, (void*)&dropped_samples_count,
+				length, NULL, NULL);
+		usb_transfer_schedule_ack(endpoint->out);
+	}
+	return USB_REQUEST_STATUS_OK;
 }

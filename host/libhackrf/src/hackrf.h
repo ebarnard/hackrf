@@ -258,6 +258,9 @@ extern ADDAPI int ADDCALL hackrf_operacake_gpio_test(hackrf_device* device,
 extern ADDAPI int ADDCALL hackrf_cpld_checksum(hackrf_device* device,
 											   uint32_t* crc);
 
+extern ADDAPI int ADDCALL hackrf_read_dropped_samples_count(hackrf_device* device,
+											   uint32_t* crc);
+
 #ifdef __cplusplus
 } // __cplusplus defined.
 #endif

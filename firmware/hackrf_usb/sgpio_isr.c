@@ -25,10 +25,17 @@
 #include <libopencm3/lpc43xx/sgpio.h>
 
 #include "usb_bulk_buffer.h"
+#include "usb_api_transceiver.h"
 
 void increment_buffer_offset() {
 	uint32_t buffer_idx = (usb_bulk_buffer_offset & 0x4000) >> 14;
 	uint32_t new_buffer_idx;
+
+	// If we are reading from or writing to a buffer that has not been emptied
+	// or filled by the USB subsystem then record that we have dropped samples.
+	if (buffer_count_rf[buffer_idx] != buffer_count_usb_complete[buffer_idx]) {
+		dropped_samples_count += 16;
+	}
 
 	usb_bulk_buffer_offset = (usb_bulk_buffer_offset + 32) & usb_bulk_buffer_mask;
 	new_buffer_idx = (usb_bulk_buffer_offset & 0x4000) >> 14;

@@ -90,6 +90,7 @@ typedef enum {
 	HACKRF_VENDOR_REQUEST_SPIFLASH_CLEAR_STATUS = 34,
 	HACKRF_VENDOR_REQUEST_OPERACAKE_GPIO_TEST = 35,
 	HACKRF_VENDOR_REQUEST_CPLD_CHECKSUM = 36,
+	HACKRF_VENDOR_REQUEST_READ_DROPPED_SAMPLES_COUNT = 37,
 
 	/* Update to be the next integer after the highest-numbered request. */
 	_HACKRF_VENDOR_REQUEST_ARRAY_SIZE	
@@ -146,6 +147,7 @@ static usb_request_handler_fn vendor_request_handler[] = {
 #else
 	NULL,
 #endif
+	usb_vendor_request_read_dropped_samples_count,
 };
 
 static const uint32_t vendor_request_handler_count =

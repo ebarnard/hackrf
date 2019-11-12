@@ -55,10 +55,13 @@ usb_request_status_t usb_vendor_request_set_freq_explicit(
 	usb_endpoint_t* const endpoint, const usb_transfer_stage_t stage);
 usb_request_status_t usb_vendor_request_set_hw_sync_mode(
 	usb_endpoint_t* const endpoint,	const usb_transfer_stage_t stage);
+usb_request_status_t usb_vendor_request_read_dropped_samples_count(
+	usb_endpoint_t* const endpoint,	const usb_transfer_stage_t stage);
 
 transceiver_mode_t transceiver_mode(void);
 void set_transceiver_mode(const transceiver_mode_t new_transceiver_mode);
 
 extern volatile uint8_t prime_sgpio;
+extern volatile uint32_t dropped_samples_count;
 
 #endif/*__USB_API_TRANSCEIVER_H__*/
